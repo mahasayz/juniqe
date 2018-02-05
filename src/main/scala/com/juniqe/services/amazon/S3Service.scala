@@ -1,36 +1,21 @@
 package com.juniqe.services.amazon
 
-import java.nio.file.{CopyOption, Files}
-import java.util.UUID
-
 import awscala.File
-import awscala.s3.{Bucket, PutObjectResult, S3Object}
+import awscala.s3.{Bucket, PutObjectResult, S3, S3Object}
 
-import scala.concurrent.Future
+trait S3Service {
 
-trait S3Service[T] {
+  def s3 = S3()
 
-  def s3: T
+  def getBuckets: Seq[Bucket] = s3.buckets
 
-  def getBuckets: Seq[Bucket]
+  def getBucketByName(name: String): Option[Bucket] = s3.bucket(name)
 
-  def getBucketByName: Option[Bucket]
+  def createBucket(name: String): Bucket = s3.createBucket(name)
 
-  def createObject(bucket: Bucket, name: String, file: File): PutObjectResult
+  def createObject(bucket: Bucket, name: String, file: File): PutObjectResult = bucket.put(name, file)
 
-  def getObject(bucket: Bucket, name: String): Option[S3Object]
-
-}
-
-trait MockS3Service[T] extends S3Service[T] {
-  import java.io.File
-
-  def uploadFile(file: File): Future[S3Response] = {
-    val fileName = file.getName
-    val uniqueName = s"${UUID.randomUUID}_$fileName"
-
-    Files.move(file.toPath, new File(s"/tmp/$uniqueName").toPath, REPLACE_EXISTING)
-  }
+  def getObject(bucket: Bucket, name: String): Option[S3Object] = bucket.getObject(name)
 
 }
 

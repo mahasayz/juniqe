@@ -2,6 +2,7 @@ package com.juniqe.services.db
 
 import com.juniqe.models.{ISize, Orientations, ProductTypes}
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 trait DBService {
