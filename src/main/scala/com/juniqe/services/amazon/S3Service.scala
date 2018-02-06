@@ -5,7 +5,7 @@ import awscala.s3.{Bucket, PutObjectResult, S3, S3Object}
 
 trait S3Service {
 
-  def s3 = S3()
+  implicit val s3 = S3()
 
   def getBuckets: Seq[Bucket] = s3.buckets
 
@@ -18,5 +18,3 @@ trait S3Service {
   def getObject(bucket: Bucket, name: String): Option[S3Object] = bucket.getObject(name)
 
 }
-
-case class S3Response(success: Boolean)

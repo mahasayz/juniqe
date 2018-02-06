@@ -6,11 +6,11 @@ case class IFile(designerId: Int, designId: Int, productType: ProductTypes.Value
 
 object IFile {
   def apply(fileName: String): IFile = {
-    val FILENAME_PATTERN = """(\d)-(\d)-(\d+)(\w)-(\d+)x(\d+)\.(\w{2,4})""".r
+    val FILENAME_PATTERN = """(\d+)-(\d+)-(\d+)(\w)-(\d+)x(\d+)\.(\w{2,4})""".r
     fileName match {
       case FILENAME_PATTERN(designerId, designId, productType, orientation, length, width, extension) =>
         IFile(designerId.toInt, designId.toInt, ProductTypes.withName(productType), ISize(length.toInt, width.toInt, Orientations.withName(orientation)), extension)
-      case _ => throw InvalidFilenameException("Filename is invalid")
+      case _ => throw InvalidFilenameException(s"Filename is invalid - $fileName")
     }
   }
 }

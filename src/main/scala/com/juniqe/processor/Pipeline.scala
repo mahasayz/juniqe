@@ -1,50 +1,84 @@
 package com.juniqe.processor
 
 import java.io.File
+import java.net.URI
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.{Files, Path}
+import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.UUID
 
-import com.juniqe.models.{ISize, ProcessInfo}
+import com.juniqe.models.{IFile, ISize, ProcessInfo}
 import com.juniqe.services.amazon.S3Service
 import com.juniqe.services.db.MockDBService
 import com.juniqe.utils.Utils._
 
-import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
+import scala.util.{Failure, Success, Try}
 
-class Pipeline {
+object Pipeline extends App {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   object DBDal extends MockDBService
   object S3Service extends S3Service
 
-  def moveFile(file: File): Future[Path] = Future {
-    val fileName = file.getName
-    val uniqueName = s"${UUID.randomUUID}_$fileName"
-
-    Files.move(file.toPath, new File(s"/tmp/$uniqueName").toPath, REPLACE_EXISTING)
+  def moveFile(files: Seq[File]): Future[Seq[Path]] = {
+    Future.sequence(
+      for(file <- files) yield {
+        val fileName = file.getName
+        val uniqueName = s"${UUID.randomUUID}_$fileName"
+        val path = Files.move(file.toPath, new File(s"/tmp/$fileName").toPath, REPLACE_EXISTING)
+        println(s"Successfully moved $fileName to /tmp/")
+        Future.successful(path)
+      }
+    )
   }
 
-  def generateSizes(size: ISize): Future[Seq[ISize]] = {
+  def generateSizes(ifile: IFile): Future[Seq[IFile]] = {
     val sizes = DBDal.getSizes.recover(withEmptySeq)
 
     sizes.map(s => {
-      s.filter(is => is.orientation == size.orientation && is.length < size.length && is.width < size.width)
+      s.filter(is => is.orientation == ifile.size.orientation && is.length <= ifile.size.length && is.width <= ifile.size.width)
+        .map(x => {
+          val res = ifile.copy(size = x)
+          println(s"Generated $res for $ifile")
+          res
+        })
     })
   }
 
-  def uploadToS3(file: File) = Future {
-    val bucket = S3Service.getBucketByName("test") getOrElse(S3Service.createBucket("test"))
-    S3Service.createObject(bucket, file.toPath.getFileName.toString, file)
+  def f(ifile: Path): Future[Seq[Path]] = {
+    val result = for {
+      renderableSizes <- generateSizes(IFile(ifile.getFileName.toString)).recover(withEmptySeq[IFile])
+      renderFiles = renderableSizes
+    } yield {
+      renderFiles.map(x => {
+        val path = Paths.get(s"/tmp/${x.toString}")
+        Try(Files.createFile(path)).getOrElse(path)
+      })
+    }
+    result
   }
 
-  def deleteFile(file: File): Future[Boolean] = Future {
-    Files.deleteIfExists(file.toPath)
+  def render(ifiles: Seq[Path]): Future[Seq[Path]] = {
+    val result = for (file <- ifiles) yield {
+      f(file)
+    }
+    Future.sequence(result).map(_.flatten)
   }
 
+  def uploadToS3(files: Seq[Path]) = Future.sequence(
+    for (file <- files) yield {
+//      val bucket = S3Service.getBucketByName("test") getOrElse(S3Service.createBucket("test"))
+//      S3Service.createObject(bucket, file.getFileName.toString, file.toFile)
+      Future.successful(new URI(s"https://test.s3.amazonaws.com/${file.toString}"))
+    }
+  )
 
+  def deleteFile(files: Seq[Path]): Future[Seq[Boolean]] = Future.sequence(
+    for (file <- files) yield Future.successful(Files.deleteIfExists(file))
+  )
 
-  def run(files: Seq[File]): Future[ProcessInfo] = {
+  def run(files: Seq[File]): Future[ProcessInfo[URI]] = {
     // move original file to /tmp
     // render all possible smaller versions
         // create service IMService with stub
@@ -53,16 +87,28 @@ class Pipeline {
     // delete all locally created images
     // return seq of URL strings from S3
 
-//    for (file <- files) {
-//      moveFile(file).flatMap(path => {
-//        val name = path.getFileName
-//        name.
-//      })
-//    }
+    val res = for {
+      path <- moveFile(files)
+      renderedImages <- render(path)
+      uploadURI <- uploadToS3(renderedImages)
+      r <- deleteFile(renderedImages)
+    } yield {
+      uploadURI
+    }
 
+    res.map(r => ProcessInfo[URI](true, r, r.size))
+  }
 
+  override def main(args: Array[String]) = {
+    val files = Seq(
+      Files.createFile(Paths.get("/Users/riuser/rioffice/temp/1-2-100P-80x120.jpg")).toFile,
+      Files.createFile(Paths.get("/Users/riuser/rioffice/temp/1-3-100P-60x90.jpg")).toFile,
+      Files.createFile(Paths.get("/Users/riuser/rioffice/temp/23-2-300X-70x70.jpg")).toFile
+    )
 
-    Future.successful(ProcessInfo(true, 0, 0))
+    val result = Await.result(run(files), Duration.Inf)
+
+    println(result)
   }
 
 }
