@@ -15,7 +15,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success, Try}
 
-object Pipeline extends App {
+object Pipeline {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   object DBDal extends MockDBService
@@ -70,7 +70,7 @@ object Pipeline extends App {
     for (file <- files) yield {
 //      val bucket = S3Service.getBucketByName("test") getOrElse(S3Service.createBucket("test"))
 //      S3Service.createObject(bucket, file.getFileName.toString, file.toFile)
-      Future.successful(new URI(s"https://test.s3.amazonaws.com/${file.toString}"))
+      Future.successful(new URI(s"https://test.s3.amazonaws.com${file.toString}"))
     }
   )
 
@@ -97,18 +97,6 @@ object Pipeline extends App {
     }
 
     res.map(r => ProcessInfo[URI](true, r, r.size))
-  }
-
-  override def main(args: Array[String]) = {
-    val files = Seq(
-      Files.createFile(Paths.get("/Users/riuser/rioffice/temp/1-2-100P-80x120.jpg")).toFile,
-      Files.createFile(Paths.get("/Users/riuser/rioffice/temp/1-3-100P-60x90.jpg")).toFile,
-      Files.createFile(Paths.get("/Users/riuser/rioffice/temp/23-2-300X-70x70.jpg")).toFile
-    )
-
-    val result = Await.result(run(files), Duration.Inf)
-
-    println(result)
   }
 
 }
