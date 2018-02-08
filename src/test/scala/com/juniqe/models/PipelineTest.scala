@@ -52,4 +52,21 @@ class PipelineTest extends FunSuite with Matchers {
     result shouldBe ProcessInfo[URI](true, expectedResult, expectedResult.size)
   }
 
+  ignore("generate proper urls without duplicates in cases of files sharing subset render sizes") {
+    val files = Seq(
+      Files.createFile(Paths.get("./1-2-100P-120x80.jpg")).toFile,
+      Files.createFile(Paths.get("./1-2-100P-60x40.jpg")).toFile
+    )
+
+    val result = Await.result(Pipeline.run(files), 10.seconds)
+    val expectedResult = Seq(
+      new URI("https://test.s3.amazonaws.com/tmp/1-2-100P-30x20.jpg"),
+      new URI("https://test.s3.amazonaws.com/tmp/1-2-100P-60x40.jpg"),
+      new URI("https://test.s3.amazonaws.com/tmp/1-2-100P-90x60.jpg"),
+      new URI("https://test.s3.amazonaws.com/tmp/1-2-100P-120x80.jpg")
+    )
+
+    result shouldBe ProcessInfo[URI](true, expectedResult, expectedResult.size)
+  }
+
 }
